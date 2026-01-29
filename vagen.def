@@ -44,15 +44,27 @@ From: nvidia/cuda:12.4.1-devel-ubuntu22.04
     mkdir -p /opt/build
     git clone https://github.com/mll-lab-nu/VAGEN.git /opt/build/vagen
     cd /opt/build/vagen
-    # Default is main, no need to checkout vagen-lite
     git submodule update --init --recursive
 
-    # 5. Install VAGEN dependencies (from scripts/install.sh and setup.py)
+    # 5. Install VERL dependencies (FIRST, to get Torch)
+    # The repo should have the verl submodule initialized
+    cd verl
+    export USE_MEGATRON=0
+    export USE_SGLANG=1
+    bash scripts/install_vllm_sglang_mcore.sh
+    
+    # Finalize VERL install
+    pip install --no-deps -e .
+    cd ..
+
+    # 6. Install VAGEN dependencies (from scripts/install.sh and setup.py)
     # Common deps
     pip install 'qwen-vl-utils'
     pip install 'mathruler'
     pip install 'matplotlib'
     pip install 'flask'
+    
+    # Flash Attention (needs torch)
     pip install flash-attn==2.7.4.post1
     
     # VAGEN package
@@ -64,18 +76,8 @@ From: nvidia/cuda:12.4.1-devel-ubuntu22.04
     pip install 'gymnasium'
     pip install "gymnasium[toy-text]"
     pip install together
-
-    # 6. Install VERL dependencies
-    # The repo should have the verl submodule initialized
-    cd verl
-    export USE_MEGATRON=0
-    export USE_SGLANG=1
-    bash scripts/install_vllm_sglang_mcore.sh
     
-    # 7. Finalize VERL install
-    pip install --no-deps -e .
-    
-    # 8. Install TRL (matches lite def, likely needed)
+    # 7. Install TRL (matches lite def, likely needed)
     pip install "trl==0.26.2"
 
     # Cleanup
