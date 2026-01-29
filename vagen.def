@@ -1,0 +1,88 @@
+Bootstrap: docker
+From: nvidia/cuda:12.4.1-devel-ubuntu22.04
+
+%labels
+    Author VAGEN-Team
+    Version vagen-full-v1
+
+%environment
+    export DEBIAN_FRONTEND=noninteractive
+    export PATH=/opt/conda/bin:$PATH
+    export USE_MEGATRON=0
+    export USE_SGLANG=1
+    # Set cache dirs to writable locations if needed, or bind mount them
+    export XDG_CACHE_HOME=/tmp/.cache
+
+%post
+    # 1. Install System Dependencies
+    apt-get update && apt-get install -y \
+        wget \
+        git \
+        build-essential \
+        ffmpeg \
+        libsm6 \
+        libxext6 \
+        ninja-build \
+        && rm -rf /var/lib/apt/lists/*
+
+    # 2. Install Miniconda (Python 3.12)
+    wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
+    bash miniconda.sh -b -p /opt/conda
+    rm miniconda.sh
+    export PATH=/opt/conda/bin:$PATH
+
+    # 3. Create Environment
+    # Use conda-forge to avoid Anaconda Terms of Service prompts
+    conda config --add channels conda-forge
+    conda config --remove channels defaults
+    conda config --set channel_priority strict
+    conda install -y python=3.12 pip
+    conda clean -ya
+
+    # 4. Clone VAGEN (MAIN branch) to install dependencies
+    # We use a temporary location to install dependencies defined in the repo
+    mkdir -p /opt/build
+    git clone https://github.com/mll-lab-nu/VAGEN.git /opt/build/vagen
+    cd /opt/build/vagen
+    # Default is main, no need to checkout vagen-lite
+    git submodule update --init --recursive
+
+    # 5. Install VAGEN dependencies (from scripts/install.sh and setup.py)
+    # Common deps
+    pip install 'qwen-vl-utils'
+    pip install 'mathruler'
+    pip install 'matplotlib'
+    pip install 'flask'
+    pip install flash-attn==2.7.4.post1
+    
+    # VAGEN package
+    pip install -e .
+
+    # Environment deps
+    pip install 'gym'
+    pip install 'gym-sokoban'
+    pip install 'gymnasium'
+    pip install "gymnasium[toy-text]"
+    pip install together
+
+    # 6. Install VERL dependencies
+    # The repo should have the verl submodule initialized
+    cd verl
+    export USE_MEGATRON=0
+    export USE_SGLANG=1
+    bash scripts/install_vllm_sglang_mcore.sh
+    
+    # 7. Finalize VERL install
+    pip install --no-deps -e .
+    
+    # 8. Install TRL (matches lite def, likely needed)
+    pip install "trl==0.26.2"
+
+    # Cleanup
+    pip cache purge
+    # We keep /opt/build/vagen because 'pip install -e .' links to it. 
+    # If users bind mount their code, they should switch to that directory.
+    
+%runscript
+    # Default command
+    exec /bin/bash "$@"
